@@ -1,4 +1,29 @@
-﻿using System;
+﻿/*
+ * Copyright (c) DeepThink Pty Ltd, http://www.deepthinklabs.com/
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the OpenSimulator Project nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE DEVELOPERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE CONTRIBUTORS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -18,7 +43,7 @@ namespace DeepThink.PayPal
 {
     public class DTLPayPalModule : ISharedRegionModule, IMoneyModule
     {
-        private const string m_ppurl = "www.paypal.com"; // Change to www.sandbox.paypal.com for testing.
+        private string m_ppurl = "www.paypal.com"; // Change to www.sandbox.paypal.com for testing.
 
         private bool m_active;
         private bool m_enabled;
@@ -302,7 +327,7 @@ namespace DeepThink.PayPal
 
         public string Name
         {
-            get { return "DeepThink PayPal Module - ©2009 DeepThink Pty Ltd. See README for info"; }
+            get { return "DeepThink PayPal Module - ©2009 DeepThink Pty Ltd."; }
         }
 
         public Type ReplaceableInterface
@@ -360,11 +385,22 @@ namespace DeepThink.PayPal
                 return;
             }
 
+            if (config.GetBoolean("Enabled",false))
+            {
+                m_log.Info("[DTL PayPal] Enabled=true not specified in config. Skipping.");
+                return;
+            }
+
+            m_ppurl = config.GetString("PayPalURL", m_ppurl);
+
             if(!config.GetBoolean("Enabled",false))
             {
                 m_log.Info("[DTL PayPal] Not enabled.");
                 return;
             }
+
+            m_log.Warn("[DTL PayPal] No users specified, skipping load.");
+
 
             m_enabled = true;
         }
@@ -401,15 +437,15 @@ namespace DeepThink.PayPal
                     if (string.IsNullOrEmpty(email))
                     {
                         m_log.Error("[DTL PayPal] PayPal email address not set for " + user +
-                                    " in [DTL PayPal Users] config section. Aborting.");
-                        return;
+                                    " in [DTL PayPal Users] config section. Skipping.");
+                        // Did abort here, but since the users are being added to the list regardless...
                     }
 
                     if (!DTLPayPalHelpers.IsValidEmail(email))
                     {
                         m_log.Error("[DTL PayPal] PayPal email address not valid for " + user +
-                                    " in [DTL PayPal Users] config section. Aborting.");
-                        return;
+                                    " in [DTL PayPal Users] config section. Skipping.");
+                        // See comment above.
                     }
 
                     m_usersemail[upd.ID] = email;
