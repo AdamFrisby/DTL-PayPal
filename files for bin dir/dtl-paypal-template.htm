@@ -1,0 +1,121 @@
+<!-- Sample Layout File for DTL-PayPal -->
+<html>
+	<head>
+		<title>Transaction Requires PayPal</title>
+		<style>
+			body {
+				margin: 0px 0px 0px 0px;
+				padding: 0px 0px 0px 0px;
+				font-family: verdana, arial, helvetica, sans-serif;
+				color: #666666;
+				background-color: #eeeeee;
+				text-align: center;
+				/* part 1 of 2 centering hack */
+				}
+			#content {
+				width: 600px; 
+				padding: 10px;
+				margin-top: 20px;
+				margin-bottom: 20px;
+				margin-right: auto;
+				margin-left: auto; 	
+				/* opera does not like 'margin:20px auto' */
+				background: #ffffff;
+				border: 1px solid #cccccc;
+				text-align:left; 
+				/* part 2 of 2 centering hack */
+				width: 400px; /* ie5win fudge begins */
+				voice-family: "\"}\"";
+				voice-family:inherit;
+				width: 370px;
+				}
+			
+			#header {
+				width: 600px; 
+				padding: 10px;
+				margin-top: 20px;
+				margin-bottom: 20px;
+				margin-right: auto;
+				margin-left: auto; 	
+				/* opera does not like 'margin:20px auto' */
+				background: #ffffff;
+				border: 1px solid #cccccc;
+				text-align:left; 
+				/* part 2 of 2 centering hack */
+				width: 400px; /* ie5win fudge begins */
+				voice-family: "\"}\"";
+				voice-family:inherit;
+				width: 370px;
+				}			
+				
+			#footer {
+				width: 600px; 
+				padding: 10px;
+				margin-top: 20px;
+				margin-bottom: 20px;
+				margin-right: auto;
+				margin-left: auto; 	
+				/* opera does not like 'margin:20px auto' */
+				background: #ffffff;
+				border: 1px solid #cccccc;
+				text-align:left; 
+				/* part 2 of 2 centering hack */
+				width: 400px; /* ie5win fudge begins */
+				voice-family: "\"}\"";
+				voice-family:inherit;
+				width: 370px;
+				}	
+				
+			#warning {
+				width: 600px; 
+				padding: 10px;
+				margin-top: 0px;
+				margin-bottom: 0px;
+				margin-right: auto;
+				margin-left: auto; 	
+				/* opera does not like 'margin:20px auto' */
+				background: #ffdba6;
+				border: 1px solid #ff9900;
+				text-align:left; 
+				/* part 2 of 2 centering hack */
+				width: 400px; /* ie5win fudge begins */
+				voice-family: "\"}\"";
+				voice-family:inherit;
+				width: 370px;
+				}	
+				
+			h1 {
+				padding: 0px;
+				margin: 0px;
+			}
+			
+			h2 {
+				padding: 0px;
+				margin: 0px;
+				font-size: 0.9em;
+			}
+			
+			p {
+				margin-top: 0px;
+			}
+		</style>
+	</head>
+	<div id="header">
+		<h1>Pay with PayPal</h1>
+	</div>
+	<div id="warning">
+		<h2>Experimental Warning</h2>
+		<p style="margin-bottom: 0px; font-size: 0.8em">This is experimental. Please do not use in production.</p>
+	</div>
+	<div id="content">
+		<p>Purchasing {ITEM} will cost {AMOUNT} {CURRENCYCODE}.</p>
+		<p style="font-weight: bold;">This will be billed in {CURRENCYCODE} from your Credit Card or Bank Account via PayPal.</p>
+		<!-- <p>Billing of this purchase will be handled by PayPal, which allows you to purchase items online securely without revealing your credit card or bank information to the merchant.</p> -->
+		<p>To proceed with this payment, please click the following link. The region will be notified when payment has completed to fill any applicable services.</p>
+		<p style="text-align: right; margin-bottom: 0px;"><a href="{BILLINGLINK}">Pay with PayPal</a></p>
+	</div>
+	<div id="footer">
+		<p style="font-size: 0.7em;">This transaction uses <a href="http://github.com/AdamFrisby/DTL-PayPal">DTL-PayPal</a>, a Module for <a href="http://www.opensimulator.org">OpenSimulator</a> which enables PayPal currency support. Please note that DeepThink cannot provide support and is not involved in any way with this purchase.</p>
+		<p style="margin-bottom: 0px; font-size: 0.7em;">For issues with this purchase, please contact the merchant directly or file a dispute with PayPal.</p>
+	</div>
+</html>

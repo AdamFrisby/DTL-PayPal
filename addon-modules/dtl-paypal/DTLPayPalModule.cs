@@ -40,8 +40,14 @@ using OpenSim.Region.Framework.Scenes;
 using OpenSim.Server.Base;
 using Nwc.XmlRpc;
 
+using Mono.Addins; // I hate you Mono.Addins
+
+[assembly: Addin("DtlPayPal","0.1")]
+[assembly: AddinDependency("OpenSim","0.5")]
+
 namespace DeepThink.PayPal
 {
+    [Extension(Path="/OpenSim/RegionModules",NodeName="RegionModule")]
     public class DTLPayPalModule : ISharedRegionModule, IMoneyModule
     {
         private string m_ppurl = "www.paypal.com"; // Change to www.sandbox.paypal.com for testing.
@@ -199,7 +205,7 @@ namespace DeepThink.PayPal
                          "&no_shipping=" + HttpUtility.UrlEncode("1") +
                          "&return=" + HttpUtility.UrlEncode("http://" + baseUrl + "/") + // TODO: Add in a return page
                          "&cancel_return=" + HttpUtility.UrlEncode("http://" + baseUrl + "/") + // TODO: Add in a cancel page
-                         "&notify_url=" + HttpUtility.UrlEncode("http://" + baseUrl + "/dtlppipn") +
+                         "&notify_url=" + HttpUtility.UrlEncode("http://" + baseUrl + "/dtlppipn/") +
                          "&no_note=" + HttpUtility.UrlEncode("1") +
                          "&currency_code=" + HttpUtility.UrlEncode("USD") +
                          "&lc=" + HttpUtility.UrlEncode("US") +
@@ -207,14 +213,44 @@ namespace DeepThink.PayPal
                          "&charset=" + HttpUtility.UrlEncode("UTF-8") +
                          "";
 
+            Dictionary<string,string> replacements = new Dictionary<string, string>();
+            replacements.Add("{ITEM}", txn.Description);
+            replacements.Add("{AMOUNT}", ConvertAmountToCurrency(txn.Amount).ToString());
+            replacements.Add("{CURRENCYCODE}", "USD");
+            replacements.Add("{BILLINGLINK}", url);
+
+            string template;
+
+            try
+            {
+                template = File.ReadAllText("dtl-paypal-template.htm");
+            }
+            catch (IOException e)
+            {
+                template = "Error: dtl-paypal-template.htm does not exist.";
+                m_log.Error("[DTL PayPal] Unable to load template file.");
+            }
+
+            foreach (KeyValuePair<string, string> pair in replacements)
+            {
+                template = template.Replace(pair.Key, pair.Value);
+            }
 
             Hashtable reply = new Hashtable();
 
             reply["int_response_code"] = 200; // 200 OK
-            reply["str_response_string"] = "<h1>PayPal Time</h1><p>Click <a href=\"" + url + "\"> here</a> to continue.";
+            reply["str_response_string"] = template;
             reply["content_type"] = "text/html";
 
             return reply;
+        }
+
+        internal void debugStringDict(Dictionary<string,string> strs)
+        {
+            foreach (KeyValuePair<string, string> str in strs)
+            {
+                m_log.Info("[DTL PayPal] '" + str.Key + "' = '" + str.Value + "'");
+            }
         }
 
         public Hashtable DtlIPN(Hashtable request)
@@ -258,21 +294,24 @@ namespace DeepThink.PayPal
             if (httpWebResponse.StatusCode != HttpStatusCode.OK)
             {
                 m_log.Error("[DTL PayPal] IPN Status code != 200. Aborting.");
+                debugStringDict(postvals);
                 return reply;
             }
 
             if (!response.Contains("VERIFIED"))
             {
                 m_log.Error("[DTL PayPal] IPN was NOT verified. Aborting.");
+                debugStringDict(postvals);
                 return reply;
             }
 
             // Handle IPN Components
             try
             {
-                if (postvals["payment_status"] != "Confirmed")
+                if (postvals["payment_status"] != "Completed")
                 {
                     m_log.Error("[DTL PayPal] Transaction not confirmed. Aborting.");
+                    debugStringDict(postvals);
                     return reply;
                 }
 
@@ -280,6 +319,7 @@ namespace DeepThink.PayPal
                 {
                     m_log.Error("[DTL PayPal] Payment was made in an incorrect currency (" + postvals["mc_currency"] +
                                 "). Aborting.");
+                    debugStringDict(postvals);
                     return reply;
                 }
 
@@ -292,6 +332,7 @@ namespace DeepThink.PayPal
                     if (!m_transactionsInProgress.ContainsKey(txnID))
                     {
                         m_log.Error("[DTL PayPal] Recieved IPN request for Payment that is not in progress. Aborting.");
+                        debugStringDict(postvals);
                         return reply;
                     }
 
@@ -304,6 +345,7 @@ namespace DeepThink.PayPal
                 {
                     m_log.Error("[DTL PayPal] Expected payment was " + ConvertAmountToCurrency(txn.Amount) +
                                 " but recieved " + amountPaid + " " + postvals["mc_currency"] + " instead. Aborting.");
+                    debugStringDict(postvals);
                     return reply;
                 }
 
@@ -314,6 +356,7 @@ namespace DeepThink.PayPal
             catch (KeyNotFoundException)
             {
                 m_log.Error("[DTL PayPal] Recieved badly formatted IPN notice. Aborting.");
+                debugStringDict(postvals);
                 return reply;
             }
             // Wheeeee
@@ -338,6 +381,7 @@ namespace DeepThink.PayPal
 
         public void Initialise(IConfigSource source)
         {
+            m_log.Info("[DTL PayPal] Initialising.");
             m_config = source;
         }
 
@@ -348,14 +392,84 @@ namespace DeepThink.PayPal
 
         public void AddRegion(Scene scene)
         {
+            m_log.Info("[DTL PayPal] Found Scene.");
+
             lock (m_scenes)
                 m_scenes.Add(scene);
 
             if (m_enabled)
                 scene.RegisterModuleInterface<IMoneyModule>(this);
 
-            scene.EventManager.OnMoneyTransfer += EventManager_OnMoneyTransfer;
+            if (m_enabled)
+            {
+                scene.EventManager.OnMoneyTransfer += EventManager_OnMoneyTransfer;
+                scene.EventManager.OnNewClient += EventManager_OnNewClient;
+            }
         }
+
+        #region Basic Plumbing of Currency Events
+
+        void EventManager_OnNewClient(IClientAPI client)
+        {
+            client.OnMoneyBalanceRequest += OnMoneyBalanceRequest;
+            client.OnRequestPayPrice += requestPayPrice;
+            client.OnObjectBuy += ObjectBuy;
+        }
+
+        internal Scene LocateSceneClientIn(UUID agentID)
+        {
+            foreach (Scene scene in m_scenes)
+            {
+                if(scene.Entities.ContainsKey(agentID))
+                    return scene;
+            }
+
+            return null;
+        }
+
+        public void ObjectBuy(IClientAPI remoteClient, UUID agentID,
+                UUID sessionID, UUID groupID, UUID categoryID,
+                uint localID, byte saleType, int salePrice)
+        {
+            Scene s = LocateSceneClientIn(remoteClient.AgentId);
+            SceneObjectPart part = s.GetSceneObjectPart(localID);
+            if (part == null)
+            {
+                remoteClient.SendAgentAlertMessage("Unable to buy now. The object was not found.", false);
+                return;
+            }
+            s.PerformObjectBuy(remoteClient, categoryID, localID, saleType);
+        }
+
+        public void requestPayPrice(IClientAPI client, UUID objectID)
+        {
+            Scene scene = LocateSceneClientIn(client.AgentId);
+            if (scene == null)
+                return;
+
+            SceneObjectPart task = scene.GetSceneObjectPart(objectID);
+            if (task == null)
+                return;
+            SceneObjectGroup group = task.ParentGroup;
+            SceneObjectPart root = group.RootPart;
+
+            client.SendPayPrice(objectID, root.PayPrice);
+        }
+
+        void OnMoneyBalanceRequest(IClientAPI client, UUID agentID, UUID SessionID, UUID TransactionID)
+        {
+            if (client.AgentId == agentID && client.SessionId == SessionID)
+            {
+                int returnfunds = 1000000;
+                client.SendMoneyBalance(TransactionID, true, new byte[0], returnfunds);
+            }
+            else
+            {
+                client.SendAlertMessage("Unable to send your money balance to you!");
+            }
+        }
+
+        #endregion
 
         public void RemoveRegion(Scene scene)
         {
@@ -386,12 +500,6 @@ namespace DeepThink.PayPal
                 return;
             }
 
-            if (config.GetBoolean("Enabled",false))
-            {
-                m_log.Info("[DTL PayPal] Enabled=true not specified in config. Skipping.");
-                return;
-            }
-
             m_ppurl = config.GetString("PayPalURL", m_ppurl);
 
             if(!config.GetBoolean("Enabled",false))
@@ -400,7 +508,7 @@ namespace DeepThink.PayPal
                 return;
             }
 
-            m_log.Warn("[DTL PayPal] No users specified, skipping load.");
+            m_log.Warn("[DTL PayPal] Loaded.");
 
 
             m_enabled = true;
@@ -460,8 +568,8 @@ namespace DeepThink.PayPal
             }
 
             // Add HTTP Handlers (user, then PP-IPN)
-            MainServer.Instance.AddHTTPHandler("dtlpp", DtlUserPage);
-            MainServer.Instance.AddHTTPHandler("dtlppipn", DtlIPN);
+            MainServer.Instance.AddHTTPHandler("/dtlpp/", DtlUserPage);
+            MainServer.Instance.AddHTTPHandler("/dtlppipn/", DtlIPN);
 
             // XMLRPC Handlers for Standalone
             MainServer.Instance.AddXmlRPCHandler("getCurrencyQuote", quote_func);
@@ -575,13 +683,13 @@ namespace DeepThink.PayPal
 
         #endregion
 
-        #region Some Quick Funcs
+        #region Some Quick Funcs needed for the client
 
         public XmlRpcResponse quote_func(XmlRpcRequest request, IPEndPoint remoteClient)
         {
             // Hashtable requestData = (Hashtable) request.Params[0];
             // UUID agentId = UUID.Zero;
-            int amount = 0;
+            int amount = 10000;
             Hashtable quoteResponse = new Hashtable();
             XmlRpcResponse returnval = new XmlRpcResponse();
 
