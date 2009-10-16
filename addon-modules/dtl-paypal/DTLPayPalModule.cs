@@ -38,6 +38,7 @@ using OpenSim.Framework.Communications;
 using OpenSim.Region.Framework.Interfaces;
 using OpenSim.Region.Framework.Scenes;
 using OpenSim.Server.Base;
+using Nwc.XmlRpc;
 
 namespace DeepThink.PayPal
 {
@@ -462,6 +463,10 @@ namespace DeepThink.PayPal
             MainServer.Instance.AddHTTPHandler("dtlpp", DtlUserPage);
             MainServer.Instance.AddHTTPHandler("dtlppipn", DtlIPN);
 
+            // XMLRPC Handlers for Standalone
+            MainServer.Instance.AddXmlRPCHandler("getCurrencyQuote", quote_func);
+            MainServer.Instance.AddXmlRPCHandler("buyCurrency", buy_func);
+
             m_active = true;
         }
 
@@ -569,5 +574,47 @@ namespace DeepThink.PayPal
         }
 
         #endregion
+
+        #region Some Quick Funcs
+
+        public XmlRpcResponse quote_func(XmlRpcRequest request, IPEndPoint remoteClient)
+        {
+            // Hashtable requestData = (Hashtable) request.Params[0];
+            // UUID agentId = UUID.Zero;
+            int amount = 0;
+            Hashtable quoteResponse = new Hashtable();
+            XmlRpcResponse returnval = new XmlRpcResponse();
+
+
+            Hashtable currencyResponse = new Hashtable();
+            currencyResponse.Add("estimatedCost", 0);
+            currencyResponse.Add("currencyBuy", amount);
+
+            quoteResponse.Add("success", true);
+            quoteResponse.Add("currency", currencyResponse);
+            quoteResponse.Add("confirm", "asdfad9fj39ma9fj");
+
+            returnval.Value = quoteResponse;
+            return returnval;
+
+
+
+        }
+
+        public XmlRpcResponse buy_func(XmlRpcRequest request, IPEndPoint remoteClient)
+        {
+            // Hashtable requestData = (Hashtable) request.Params[0];
+            // UUID agentId = UUID.Zero;
+            // int amount = 0;
+
+            XmlRpcResponse returnval = new XmlRpcResponse();
+            Hashtable returnresp = new Hashtable();
+            returnresp.Add("success", true);
+            returnval.Value = returnresp;
+            return returnval;
+        }
+
+        #endregion 
+
     }
 }

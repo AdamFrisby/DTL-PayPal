@@ -23,6 +23,7 @@
   <Reference name="OpenSim.Framework.Communications.dll"/>
   <Reference name="OpenSim.Server.Base.dll"/>
   <Reference name="OpenSim.Server.Base.dll"/>
+  <Reference name="XMLRPC.dll"/>
  
   <!-- To allow regions to have mono addins -->
   <Reference name="Mono.Addins.dll" />
