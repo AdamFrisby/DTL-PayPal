@@ -1,0 +1,34 @@
+<!-- Image Service Module -->
+<Project name="DeepThink.PayPal" path="addon-modules/dtl-paypal" type="Library">
+  <Configuration name="Debug">
+    <Options>
+      <OutputPath>../../bin/</OutputPath>
+    </Options>
+  </Configuration>
+  <Configuration name="Release">
+    <Options>
+      <OutputPath>../../bin/</OutputPath>
+    </Options>
+  </Configuration>
+ 
+  <ReferencePath>../../bin/</ReferencePath>
+  <Reference name="System"/>
+  <Reference name="System.Web"/>
+  <Reference name="OpenMetaverseTypes.dll"/>
+  <Reference name="Nini.dll" />
+  <Reference name="log4net.dll"/>
+  <Reference name="OpenSim.Framework.dll"/>
+  <Reference name="OpenSim.Framework.Servers.HttpServer.dll"/>
+  <Reference name="OpenSim.Region.Framework.dll"/>
+  <Reference name="OpenSim.Framework.Communications.dll"/>
+  <Reference name="OpenSim.Server.Base.dll"/>
+  <Reference name="OpenSim.Server.Base.dll"/>
+ 
+  <!-- To allow regions to have mono addins -->
+  <Reference name="Mono.Addins.dll" />
+ 
+  <Files>
+    <Match pattern="*.cs" recurse="true"/>
+  </Files>
+ 
+</Project>

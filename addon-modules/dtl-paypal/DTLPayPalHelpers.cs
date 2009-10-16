@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace OpenSim.Region.OptionalModules.World.DTLPayPalModule
+namespace DeepThink.PayPal
 {
     public static class DTLPayPalHelpers
     {

@@ -14,7 +14,7 @@ using OpenSim.Region.Framework.Interfaces;
 using OpenSim.Region.Framework.Scenes;
 using OpenSim.Server.Base;
 
-namespace OpenSim.Region.OptionalModules.World.DTLPayPalModule
+namespace DeepThink.PayPal
 {
     public class DTLPayPalModule : ISharedRegionModule, IMoneyModule
     {
@@ -23,7 +23,7 @@ namespace OpenSim.Region.OptionalModules.World.DTLPayPalModule
         private bool m_active;
         private bool m_enabled;
 
-        private object m_setupLock;
+        private readonly object m_setupLock = new object();
         private bool m_setup;
 
         private static readonly ILog m_log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
@@ -302,7 +302,7 @@ namespace OpenSim.Region.OptionalModules.World.DTLPayPalModule
 
         public string Name
         {
-            get { return "DeepThink PayPal Module - ©2009 DeepThink Pty Ltd"; }
+            get { return "DeepThink PayPal Module - ©2009 DeepThink Pty Ltd. See README for info"; }
         }
 
         public Type ReplaceableInterface
