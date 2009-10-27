@@ -32,6 +32,12 @@ namespace DeepThink.PayPal
 {
     internal class PayPalTransaction
     {
+        internal enum InternalTransactionType
+        {
+            Payment, // User2User or User2Object "Pay" Option
+            Purchase // User2Object "Buy" Option
+        }
+
         public readonly UUID From;
         public readonly UUID To;
 
@@ -54,9 +60,16 @@ namespace DeepThink.PayPal
         /// </summary>
         public readonly int Amount;
 
-        public PayPalTransaction(UUID from, UUID to, string sellersEmail, int amount, Scene scene, string description)
+        public readonly InternalTransactionType InternalType;
+
+        // For use only with object purchases.
+        public readonly UUID InternalPurchaseFolderID;
+        public readonly byte InternalPurchaseType;
+
+        public PayPalTransaction(UUID from, UUID to, string sellersEmail, int amount, Scene scene, string description, InternalTransactionType internalType)
         {
             From = from;
+            InternalType = internalType;
             Description = description;
             Scene = scene;
             Amount = amount;
@@ -74,9 +87,10 @@ namespace DeepThink.PayPal
             TxID = new UUID(txID);
         }
 
-        public PayPalTransaction(UUID from, UUID to, string sellersEmail, int amount, Scene scene, UUID objectID, string description)
+        public PayPalTransaction(UUID from, UUID to, string sellersEmail, int amount, Scene scene, UUID objectID, string description, InternalTransactionType internalType)
         {
             From = from;
+            InternalType = internalType;
             Description = description;
             Scene = scene;
             Amount = amount;
@@ -93,6 +107,32 @@ namespace DeepThink.PayPal
 
             TxID = new UUID(txID);
         }
+
+
+        public PayPalTransaction(UUID from, UUID to, string sellersEmail, int amount, Scene scene, UUID objectID, string description, InternalTransactionType internalType, UUID folderID, byte saleType)
+        {
+            From = from;
+            InternalType = internalType;
+            Description = description;
+            Scene = scene;
+            Amount = amount;
+            SellersEmail = sellersEmail;
+            To = to;
+            ObjectID = objectID;
+
+            InternalPurchaseFolderID = folderID;
+            InternalPurchaseType = saleType;
+
+            // Generate a 128-bit Unique ID
+            // Using the Crypto Random Generator (increased unguessability)
+            byte[] randomBuf = new byte[16];
+            RNGCryptoServiceProvider random = new RNGCryptoServiceProvider();
+            random.GetBytes(randomBuf);
+            Guid txID = new Guid(randomBuf);
+
+            TxID = new UUID(txID);
+        }
+
 
         public readonly Scene Scene;
 

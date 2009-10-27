@@ -131,13 +131,13 @@ namespace DeepThink.PayPal
                 }
 
                 txn = new PayPalTransaction(e.sender, sop.OwnerID, m_usersemail[sop.OwnerID], e.amount,
-                                            scene, e.receiver, e.description + "T:" + e.transactiontype);
+                                            scene, e.receiver, e.description + "T:" + e.transactiontype, PayPalTransaction.InternalTransactionType.Payment);
             }
             else
             {
                 // Payment to a user.
                 txn = new PayPalTransaction(e.sender, e.receiver, m_usersemail[e.receiver], e.amount,
-                                            scene, e.description + "T:" + e.transactiontype);
+                                            scene, e.description + "T:" + e.transactiontype, PayPalTransaction.InternalTransactionType.Payment);
             }
 
             // Add transaction to queue
@@ -152,19 +152,46 @@ namespace DeepThink.PayPal
 
         void TransferSuccess(PayPalTransaction transaction)
         {
-            if (transaction.ObjectID == UUID.Zero)
+            if (transaction.InternalType == PayPalTransaction.InternalTransactionType.Payment)
             {
-                // User 2 User Transaction
-                // Probably should notify them somehow.
+                if (transaction.ObjectID == UUID.Zero)
+                {
+                    // User 2 User Transaction
+                    // Probably should notify them somehow.
+                }
+                else
+                {
+                    if (OnObjectPaid != null)
+                    {
+                        OnObjectPaid(transaction.ObjectID, transaction.From, transaction.Amount);
+                    }
+                }
+            }
+            else if (transaction.InternalType == PayPalTransaction.InternalTransactionType.Purchase)
+            {
+                if (transaction.ObjectID == UUID.Zero)
+                {
+                    m_log.Error("[DTL PayPal] Unable to find Object bought! UUID Zero.");
+                }
+                else
+                {
+                    Scene s = LocateSceneClientIn(transaction.From);
+                    SceneObjectPart part = s.GetSceneObjectPart(transaction.ObjectID);
+                    if (part == null)
+                    {
+                        m_log.Error("[DTL PayPal] Unable to find Object bought! UUID = " + transaction.ObjectID);
+                        return;
+                    }
+                    s.PerformObjectBuy(s.SceneContents.GetControllingClient(transaction.From),
+                                       transaction.InternalPurchaseFolderID, part.LocalId,
+                                       transaction.InternalPurchaseType);
+                }
             }
             else
             {
-                if (OnObjectPaid != null)
-                {
-                    OnObjectPaid(transaction.ObjectID, transaction.From, transaction.Amount);
-                }
+                m_log.Error("[DTL PayPal] Unknown Internal Transaction Type.");
+                return;
             }
-
             // Cleanup.
             lock (m_transactionsInProgress)
                 m_transactionsInProgress.Remove(transaction.TxID);
@@ -216,8 +243,13 @@ namespace DeepThink.PayPal
             Dictionary<string,string> replacements = new Dictionary<string, string>();
             replacements.Add("{ITEM}", txn.Description);
             replacements.Add("{AMOUNT}", ConvertAmountToCurrency(txn.Amount).ToString());
+            replacements.Add("{AMOUNTOS}", txn.Amount.ToString());
             replacements.Add("{CURRENCYCODE}", "USD");
             replacements.Add("{BILLINGLINK}", url);
+            replacements.Add("{OBJECTID}", txn.ObjectID.ToString());
+            replacements.Add("{SELLEREMAIL}", txn.SellersEmail);
+
+            
 
             string template;
 
@@ -225,7 +257,7 @@ namespace DeepThink.PayPal
             {
                 template = File.ReadAllText("dtl-paypal-template.htm");
             }
-            catch (IOException e)
+            catch (IOException)
             {
                 template = "Error: dtl-paypal-template.htm does not exist.";
                 m_log.Error("[DTL PayPal] Unable to load template file.");
@@ -245,7 +277,7 @@ namespace DeepThink.PayPal
             return reply;
         }
 
-        internal void debugStringDict(Dictionary<string,string> strs)
+        internal static void debugStringDict(Dictionary<string,string> strs)
         {
             foreach (KeyValuePair<string, string> str in strs)
             {
@@ -431,14 +463,66 @@ namespace DeepThink.PayPal
                 UUID sessionID, UUID groupID, UUID categoryID,
                 uint localID, byte saleType, int salePrice)
         {
-            Scene s = LocateSceneClientIn(remoteClient.AgentId);
-            SceneObjectPart part = s.GetSceneObjectPart(localID);
-            if (part == null)
+            if (!m_active)
+                return;
+
+            IClientAPI user = null;
+            Scene scene = null;
+
+            // Find the user's controlling client.
+            lock (m_scenes)
             {
-                remoteClient.SendAgentAlertMessage("Unable to buy now. The object was not found.", false);
+                foreach (Scene sc in m_scenes)
+                {
+                    List<ScenePresence> avs =
+                        sc.GetAvatars().FindAll(
+                            x =>
+                            (x.UUID == agentID && x.IsChildAgent == false)
+                            );
+
+                    if (avs.Count > 0)
+                    {
+                        if (avs.Count > 1)
+                        {
+                            m_log.Warn("[DTL PayPal] Multiple avatars with same UUID! Aborting transaction.");
+                            return;
+                        }
+
+                        // Found the client,
+                        // and their root scene.
+                        user = avs[0].ControllingClient;
+                        scene = sc;
+                    }
+                }
+            }
+
+            if (scene == null || user == null)
+            {
+                m_log.Warn("[DTL PayPal] Unable to find scene or user! Aborting transaction.");
                 return;
             }
-            s.PerformObjectBuy(remoteClient, categoryID, localID, saleType);
+
+            SceneObjectPart sop = scene.GetSceneObjectPart(localID);
+            if (sop == null)
+            {
+                m_log.Warn("[DTL PayPal] Unable to find SceneObjectPart that was paid. Aborting transaction.");
+                return;
+            }
+
+            PayPalTransaction txn = new PayPalTransaction(agentID, sop.OwnerID, m_usersemail[sop.OwnerID], salePrice,
+                                                          scene, sop.UUID,
+                                                          "Item Purchase - " + sop.Name + " (" + saleType + ")",
+                                                          PayPalTransaction.InternalTransactionType.Purchase, categoryID,
+                                                          saleType);
+
+            // Add transaction to queue
+            lock (m_transactionsInProgress)
+                m_transactionsInProgress.Add(txn.TxID, txn);
+
+            string baseUrl = m_scenes[0].RegionInfo.ExternalHostName + ":" + m_scenes[0].RegionInfo.HttpPort;
+
+            user.SendLoadURL("DTL PayPal", txn.ObjectID, txn.To, false, "Confirm purchase?",
+                             "http://" + baseUrl + "/dtlpp/?txn=" + txn.TxID);
         }
 
         public void requestPayPrice(IClientAPI client, UUID objectID)
@@ -456,17 +540,10 @@ namespace DeepThink.PayPal
             client.SendPayPrice(objectID, root.PayPrice);
         }
 
-        void OnMoneyBalanceRequest(IClientAPI client, UUID agentID, UUID SessionID, UUID TransactionID)
+        static void OnMoneyBalanceRequest(IClientAPI client, UUID agentID, UUID SessionID, UUID TransactionID)
         {
-            if (client.AgentId == agentID && client.SessionId == SessionID)
-            {
-                int returnfunds = 1000000;
-                client.SendMoneyBalance(TransactionID, true, new byte[0], returnfunds);
-            }
-            else
-            {
-                client.SendAlertMessage("Unable to send your money balance to you!");
-            }
+            const int returnfunds = 1000000;
+            client.SendMoneyBalance(TransactionID, true, new byte[0], returnfunds);
         }
 
         #endregion
@@ -689,7 +766,7 @@ namespace DeepThink.PayPal
         {
             // Hashtable requestData = (Hashtable) request.Params[0];
             // UUID agentId = UUID.Zero;
-            int amount = 10000;
+            const int amount = 10000;
             Hashtable quoteResponse = new Hashtable();
             XmlRpcResponse returnval = new XmlRpcResponse();
 
@@ -711,10 +788,6 @@ namespace DeepThink.PayPal
 
         public XmlRpcResponse buy_func(XmlRpcRequest request, IPEndPoint remoteClient)
         {
-            // Hashtable requestData = (Hashtable) request.Params[0];
-            // UUID agentId = UUID.Zero;
-            // int amount = 0;
-
             XmlRpcResponse returnval = new XmlRpcResponse();
             Hashtable returnresp = new Hashtable();
             returnresp.Add("success", true);
